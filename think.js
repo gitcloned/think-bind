@@ -45,7 +45,7 @@ var $t = {};
     this.createXmlHttp = function() {
         if (window.XMLHttpRequest) return new XMLHttpRequest();
         else return new ActiveXObject("Microsoft.XMLHTTP");
-    };
+    }
     this.ajax = function (args) {
         args = $.extend({
             'callback': function () { },
@@ -157,17 +157,49 @@ var $t = {};
             this.parser = new $t.Parser(content);
         },
 
-        Template: function (template) {
-            var templateParser = new $t.template.TemplateParser(template);
-            var tokens = undefined;
-            this.nodelist = [];
-            while((tokens = templateParser.parseNext())) {
-                this.nodelist.push($t.template.libraries["__static__"](templateParser, {"template": tokens[0]}));
-                if (tokens.length > 1) {
-                    var bits = tokens[1].split( /\s+/g , 3);
-                    this.nodelist.push($t.template.libraries["__" + bits[1] + "__"](templateParser, $t.as_kwargs(bits[2].split(/\s+/g))));
+        Template: function (template, callback) {
+            var obj = this;
+
+            var loadTemplate = function () {
+                var templateParser = new $t.template.TemplateParser(template);
+                var tokens = undefined;
+                this.nodelist = [];
+                while ((tokens = templateParser.parseNext())) {
+                    this.nodelist.push($t.template.libraries["__static__"](templateParser, { "template": tokens[0] }));
+                    if (tokens.length > 1) {
+                        var bits = tokens[1].split(/\s+/g, 3);
+                        this.nodelist.push($t.template.libraries["__" + bits[1] + "__"](templateParser, $t.as_kwargs(bits[2].split(/\s+/g))));
+                    }
                 }
+                if (callback) callback(this);
             }
+
+            if (callback) {
+                loader.load({
+                    url: template,
+                    type: "GET"
+                }, function (html) {
+                    template = html.toString();
+                    loadTemplate.call(obj);
+                }, function () {
+                    loadTemplate.call(obj);
+                });
+            }
+            else {
+                loadTemplate.call(obj);
+                return this;
+            }
+        },
+
+        template: function (template, callback) {
+            new $t.template.Template(template, callback);
+        },
+
+        // render
+        render: function (template, context, callback) {
+            new $t.template.Template(template, function (t) {
+                callback(t.render(context));
+            });
         }
     };
 
@@ -206,7 +238,10 @@ var $t = {};
                                                     var tokenMatch = key.match(/__(.)*?__/gm);
                                                     if (!tokenMatch) {
                                                         var val = undefined;
-                                                        try { val = eval("context." + key); } catch (e) { }
+                                                        try {
+                                                            if (typeof context == "string") val = context;
+                                                            else val = eval("context." + key);
+                                                        } catch (e) { }
                                                         if (typeof val != "undefined")
                                                             return str.replace(it, val);
                                                         return str;
@@ -215,7 +250,10 @@ var $t = {};
                                                         key = tokenMatch.withEach(function (tkit, tkstr) {
                                                             var tkey = tkit.substring(2, tkit.length - 2);
                                                             var val = undefined;
-                                                            try { val = eval("context." + tkey); } catch (e) { }
+                                                            try {
+                                                                if (typeof context == "string") val = context;
+                                                                else val = eval("context." + tkey);
+                                                            } catch (e) { }
                                                             if (typeof val != "undefined")
                                                                 tkstr = tkstr.replace(tkit, val);
                                                             return eval(tkstr);
@@ -230,7 +268,7 @@ var $t = {};
 (function () {
 
     this.__repeat__ = function(parser, kwargs) {
-        kwargs["template"] = parser.parse("endrepeat")[0];
+        kwargs["template"] = parser.parse("endrepeat", true)[0];
         return new this.repeat(kwargs);
     };
 
@@ -241,6 +279,7 @@ var $t = {};
     };
     this.repeat.prototype.render = function (context) {
         var iter = context instanceof Array ? context : context[this.data];
+        if (!iter) iter = [];
         return iter.forEachX(function (it, idx) {
             it["idx"] = idx;
             return this.nodelist.render(it);
@@ -313,7 +352,7 @@ var $t = {};
     };
     this.add = function (params) {
         this.list[params.name] = new this(params);
-    };
+    }
 }).call ($t.template.libraries.box);
 
 // test
@@ -323,3 +362,15 @@ var parser = new $t.Parser("{% runquery name=post as stocks %}");
 //alert(parser.parse("stocks"));
 
 //document.write(new $t.template.Template("<ul> {% repeat result %} <li>Count: {{cnt}} </li> {% endrepeat %}</ul>").render({ "result": [{'cnt': 1}, {'cnt': 2}, {'cnt': 3}] }));
+/*
+var str = new $t.template.Template("My name is : {{name}}")
+    .render({
+        name: 'John'
+    });
+
+var str = new $t.template.Template("My name is : {{name}} and time is : utils.getReadableString('{{__time__}}')")
+    .render({
+        name: 'John',
+        time: '11-03-2008'
+    });
+*/
