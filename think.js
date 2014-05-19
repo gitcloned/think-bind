@@ -118,6 +118,15 @@ var $t = {};
         }
         return kwargs;
     };
+    this.extend = function (target, source) {
+        if (!source) return target;
+        for (var key in source) {
+            if (source.hasOwnProperty(key)) {
+                target[key] = source[key];
+            }
+        }
+        return target;
+    }
 }).call($t);
 
 // parser
@@ -157,50 +166,23 @@ var $t = {};
             this.parser = new $t.Parser(content);
         },
 
-        Template: function (template, callback) {
-            var obj = this;
-
-            var loadTemplate = function () {
-                var templateParser = new $t.template.TemplateParser(template);
-                var tokens = undefined;
-                this.nodelist = [];
-                while ((tokens = templateParser.parseNext())) {
-                    this.nodelist.push($t.template.libraries["__static__"](templateParser, { "template": tokens[0] }));
-                    if (tokens.length > 1) {
-                        var bits = tokens[1].split(/\s+/g, 3);
-                        this.nodelist.push($t.template.libraries["__" + bits[1] + "__"](templateParser, $t.as_kwargs(bits[2].split(/\s+/g))));
-                    }
+        Template: function (template) {
+            var templateParser = new $t.template.TemplateParser(template);
+            var tokens = undefined;
+            this.nodelist = [];
+            while((tokens = templateParser.parseNext())) {
+                this.nodelist.push($t.template.libraries["__static__"](templateParser, {"template": tokens[0]}));
+                if (tokens.length > 1) {
+                    var bits = tokens[1].split(/\s+/g);
+                    var hint = bits[1].split('.').length > 1 ? "." + bits[1].split('.')[1] : "";
+                    this.nodelist.push($t.template.libraries["__" + bits[1].split('.')[0] + "__"](templateParser, $t.as_kwargs(bits.slice(2, bits.length - 1)), hint));
                 }
-                if (callback) callback(this);
             }
-
-            if (callback) {
-                loader.load({
-                    url: template,
-                    type: "GET"
-                }, function (html) {
-                    template = html.toString();
-                    loadTemplate.call(obj);
-                }, function () {
-                    loadTemplate.call(obj);
-                });
-            }
-            else {
-                loadTemplate.call(obj);
-                return this;
-            }
-        },
-
-        template: function (template, callback) {
-            new $t.template.Template(template, callback);
-        },
-
-        // render
-        render: function (template, context, callback) {
-            new $t.template.Template(template, function (t) {
-                callback(t.render(context));
-            });
         }
+    };
+
+    render = function (template, context) {
+        return new $t.template.Template(template).render(context);
     };
 
     this.template.TemplateParser.prototype.parseNext = function() {
@@ -267,23 +249,65 @@ var $t = {};
 // register repeat
 (function () {
 
-    this.__repeat__ = function(parser, kwargs) {
-        kwargs["template"] = parser.parse("endrepeat", true)[0];
+    this.__repeat__ = function (parser, kwargs, parseHint) {
+        kwargs["template"] = parser.parse("endrepeat" + parseHint)[0];
         return new this.repeat(kwargs);
     };
 
     this.repeat = function (params) {
-        params = $.extend({ 'template': '' }, params);
+        params = $t.extend({ 'template': '' }, params);
         this.data = params['0'];
+        this.filter = params['1'];
         this.nodelist = new $t.template.Template(params['template']);
     };
+    this.repeat.prototype.pred = function (iter) {
+        var s = -1, e = 9999999;
+
+        var pred = function (s, e) {
+            return function (idx) {
+                return idx >= s && idx <= e;
+            };
+        };
+
+        if (this.filter) {
+            var f = this.filter.split("..");
+            if (f.length == 2) {
+                s = parseInt(f[0]); e = parseInt(f[1]);
+            }
+            f = this.filter.split("+");
+            if (f.length == 2) {
+                s = parseInt(f[0]); e = s + parseInt(f[1]);
+            }
+            f = this.filter.split("-");
+            if (f.length == 2) {
+                e = f[0] == "n" ? iter.length - 1 : parseInt(f[0]); s = e - parseInt(f[1]);
+            }
+            else if (f.length == 1) {
+                s = parseInt(f[0]); e = s;
+            }
+
+            return pred(s, e);
+        }
+    };
     this.repeat.prototype.render = function (context) {
-        var iter = context instanceof Array ? context : context[this.data];
-        if (!iter) iter = [];
-        return iter.forEachX(function (it, idx) {
-            it["idx"] = idx;
-            return this.nodelist.render(it);
-        }, this).join('');
+        var iter = context instanceof Array ? context : undefined;
+        if (!iter) try { iter = eval("context." + this.data); } catch (e) { }
+        if (!iter || iter == null) return "";//return "<!--{% repeat " + this.data + " %}-->" + this.nodelist.render({}) + "<!--{% endrepeat %}-->";
+        var pred = this.pred();
+        if (pred)
+            return iter.forEachX(function (it, idx) {
+                it["idx"] = idx;
+                if (!pred(idx)) return "";
+                return this.nodelist.render(it);
+            }, this).join('');
+        else
+            return iter.forEachX(function (it, idx) {
+                it["idx"] = idx;
+                return this.nodelist.render(it);
+            }, this).join('');
+    };
+    this.repeat.prototype.unrender = function (template, out) {
+        out[this.data] = [];
     };
 }).call ($t.template.libraries);
 
