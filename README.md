@@ -2,7 +2,7 @@
 
 Javascript template binding library, which simply binds a string with json.
 
-```
+``` bash
   var out = $t.render("<div>{{name}} loves think.</div>", { name: 'John' });
   alert (out);
   // alerts "John loves think."
@@ -17,7 +17,7 @@ Javascript template binding library, which simply binds a string with json.
 
 You can repeat templates, as:
 
-```
+``` bash
   var template = "<ul> \
     {% repeat fruits %} \
     <li style='color: {{color}}'>{{name}}</li> \
@@ -36,7 +36,7 @@ You can repeat templates, as:
 
 repeat templates can also be nested within each other:
 
-```
+``` bash
   var template = "<ul> \
     {% repeat.a fruits %} \
     <li style='color: {{color}}'> \
@@ -64,7 +64,7 @@ repeat templates can also be nested within each other:
 
 You can write javascript code also in expression:
 
-```
+``` bash
   var out = $t.render("<div>Double of {{num}} is {{__num__ * 2}}.</div>", { num: 8 });
   alert (out);
   // alerts "Double of 8 is 16."
