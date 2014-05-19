@@ -34,6 +34,10 @@ You can repeat templates, as:
 
 ```
 
+<ul>
+ <li style='color: red'>Red</li>
+<ul>
+
 repeat templates can also be nested within each other:
 
 ```
