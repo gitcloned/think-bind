@@ -8,6 +8,13 @@ Javascript template binding library, which simply binds a string with json.
   // alerts "John loves think."
 ```
 
+## Table of contents
+
+ - [Repeat](#repeat)
+ - [Expression](#expression)
+
+## Repeat
+
 You can repeat templates, as:
 
 ```
@@ -51,4 +58,14 @@ repeat templates can also be nested within each other:
   
   // displays fruits with their colors
 
+```
+
+## Expressions
+
+You can write javascript code also in expression:
+
+```
+  var out = $t.render("<div>Double of {{num}} is {{__num__ * 2}}.</div>", { num: 8 });
+  alert (out);
+  // alerts "Double of 8 is 16."
 ```
