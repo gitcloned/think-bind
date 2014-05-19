@@ -19,9 +19,9 @@ You can repeat templates, as:
 
 ```
   var template = "<ul> \
-    {% repeat fruits %}
-    <li style='color: {{color}}'>{{name}}</li>
-    {% endrepeat %}
+    {% repeat fruits %} \
+    <li style='color: {{color}}'>{{name}}</li> \
+    {% endrepeat %} \
   </ul>";
   
   var out = $t.render(template, [
@@ -38,16 +38,16 @@ repeat templates can also be nested within each other:
 
 ```
   var template = "<ul> \
-    {% repeat.a fruits %}
-    <li style='color: {{color}}'>
-      {{name}}
-      <i>
-        {% repeat.b likedBy %}
-          {{likedBy}}
-        {% endrepeat.b %}
-      </i>
-    </li>
-    {% endrepeat.a %}
+    {% repeat.a fruits %} \
+    <li style='color: {{color}}'> \
+      {{name}} \
+      <i> \
+        {% repeat.b likedBy %} \
+          {{likedBy}} \
+        {% endrepeat.b %} \
+      </i> \
+    </li> \
+    {% endrepeat.a %} \
   </ul>";
   
   var out = $t.render(template, [
