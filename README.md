@@ -1,11 +1,12 @@
-think
-=====
+# think
 
-javascript template libary. It provide simple api to bind json data to html templates.
+Javascript template binding library, which simply binds a string with json.
 
-ex: 
-
-  alert($t.template.Template("<div>{{name}} loves think.</div>").render({ name: 'John' }));
+```
+  var out = $t.render("<div>{{name}} loves think.</div>", { name: 'John' });
+  alert (out);
+  \\ alerts "John loves think."
+```
   
 alerts, John loves think.
 
