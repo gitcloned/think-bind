@@ -60,7 +60,7 @@ repeat templates can also be nested within each other:
 
 ```
 
-## Expressions
+## Expression
 
 You can write javascript code also in expression:
 
