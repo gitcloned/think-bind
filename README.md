@@ -5,38 +5,50 @@ Javascript template binding library, which simply binds a string with json.
 ```
   var out = $t.render("<div>{{name}} loves think.</div>", { name: 'John' });
   alert (out);
-  \\ alerts "John loves think."
+  // alerts "John loves think."
 ```
+
+You can repeat templates, as:
+
+```
+  var template = "<ul> \
+    {% repeat fruits %}
+    <li style='color: {{color}}'>{{name}}</li>
+    {% endrepeat %}
+  </ul>";
   
-alerts, John loves think.
+  var out = $t.render(template, [
+    {name: "Orange", color: 'orange'},
+    {name: "Apple", color: 'red'},
+    {name: "Mango", color: 'yellow'}
+  ]);
+  
+  // displays fruits with their colors
 
-Think also provide some of the inbuilt libraries, as
+```
 
-- repeat, which allows you to repeat template for the data items in context
+repeat templates can also be nested within each other:
 
-ex: 
+```
+  var template = "<ul> \
+    {% repeat.a fruits %}
+    <li style='color: {{color}}'>
+      {{name}}
+      <i>
+        {% repeat.b likedBy %}
+          {{likedBy}}
+        {% endrepeat.b %}
+      </i>
+    </li>
+    {% endrepeat.a %}
+  </ul>";
+  
+  var out = $t.render(template, [
+    {name: "Orange", color: 'orange', likedBy: ['John', 'Max']},
+    {name: "Apple", color: 'red', likedBy: ['John']},
+    {name: "Mango", color: 'yellow', likedBy: []}
+  ]);
+  
+  // displays fruits with their colors
 
-  var html = $t.template.Template("<h3>Favorite books: </h3><ul>{% repeat data %}<li></li>{% endrepeat %}</ul>")
-                .render({
-                  data: [
-                    { name: 'Da Vinci Code' },
-                    { name: 'Eragon' }
-                  ]
-                });
-  document.write(html);
-
-will display,
-
-  Favorite Books:
-    Da Vinci Code
-    Eragon
-    
-It provides other library as,
-- box: to wrap html in a box which can be set to auto update at a fixed interval
-
-Also,
-- you can nest libraries, i.e. you can have box in repeat, or may be reverse, repeat in  repeat.
-- template can call other javascript functions, as
-    ex: $t.template.Template("{{getReadableString('__date__')}}").render({ date: '11/17/2009' })
-        will call javascript function getReadableString with argument '11/17/2009' which can return something like
-        , 4yrs before.
+```
