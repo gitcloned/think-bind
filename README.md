@@ -85,7 +85,6 @@ Box wraps the template and data, which can be set to auto update at a regular in
   </ul>
   {% endbox %}
   
-  /*
     Displays
     
     Persons
@@ -95,5 +94,4 @@ Box wraps the template and data, which can be set to auto update at a regular in
      Russell : 32
      
     and, autoupdates it every 10s
-  */
 ```
