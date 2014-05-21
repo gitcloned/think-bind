@@ -12,6 +12,7 @@ Javascript template binding library, which simply binds a string with json.
 
  - [Repeat](#repeat)
  - [Expression](#expression)
+ - [Box](#box)
 
 ## Repeat
 
@@ -68,4 +69,31 @@ You can write javascript code also in expression:
   var out = $t.render("<div>Double of {{num}} is {{__num__ * 2}}.</div>", { num: 8 });
   alert (out);
   // alerts "Double of 8 is 16."
+```
+
+## Box
+
+Box wraps the template and data, which can be set to auto update at a regular interval
+
+```
+  {% box http://thinkweb.googlecode.com/svn/trunk/python/web/web_support/person.json autoupdate %}
+  <h1>Persons</h1>
+  <ul>
+    {% repeat data %}
+     <li>{{name}} : {{age}}</li>
+    {% endrepeat %}
+  </ul>
+  {% endbox %}
+  
+  /*
+    Displays
+    
+    Persons
+     John : 21
+     Michael : 23
+     Kathy : 22
+     Russell : 32
+     
+    and, autoupdates it every 10s
+  */
 ```
