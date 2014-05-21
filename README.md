@@ -75,7 +75,7 @@ You can write javascript code also in expression:
 
 Box wraps the template and data, which can be set to auto update at a regular interval
 
-```
+``` bash
   {% box http://thinkweb.googlecode.com/svn/trunk/python/web/web_support/person.json autoupdate %}
   <h1>Persons</h1>
   <ul>
