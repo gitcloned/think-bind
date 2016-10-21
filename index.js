@@ -1,20 +1,14 @@
 var $ROOT_DIR = require('path').dirname(require.main.filename)
+var $REQ = ""
 var fs = require('fs')
 var path = require('path')
 var numeral = require('numeral');
 // global on the server, window in the browser
 var root = this;
-
-var stream = require('stream')
-    , Transform = stream.Transform
-    , Readable = stream.Readable;
-
-if (typeof module !== 'undefined' && module.exports) {
-    root = module.exports;
-}
+var mime = require("mime");
 
 /*
-* think.js v1.0 (http://code.google.com/p/thinkweb)
+* think.js v1.0 (http://code.google.com/p/thinkweb)m
 * 
 * Code license
 * (Apache License 2.0)
@@ -53,9 +47,6 @@ var $t = {};
         for (var i = 0; i < this.length; i++)
             arg = func(this[i], arg);
         return arg;
-    };
-    Object.prototype.dump = function () {
-        return dump(this);
     };
     dump = function (obj) {
         if (typeof obj == "object" || obj instanceof Array)
@@ -190,10 +181,10 @@ var $t = {};
             this.parser = new $t.Parser(content);
         },
 
-        Template: function (template, callback) {
+        Template: function (template, callback, params) {
             var obj = this;
 
-            var loadTemplate = function () {
+            var loadTemplate = function (contentType) {
                 var templateParser = new $t.template.TemplateParser(template);
                 var tokens = undefined;
                 this.nodelist = [];
@@ -202,17 +193,31 @@ var $t = {};
                     if (tokens.length > 1) {
                         var bits = tokens[1].split(/\s+/g);
                         var hint = bits[1].split('.').length > 1 ? "." + bits[1].split('.')[1] : "";
+
                         this.nodelist.push($t.template.libraries["__" + bits[1].split('.')[0] + "__"](templateParser, $t.as_kwargs(bits.slice(2, bits.length - 1)), hint));
                     }
                 }
-                if (callback) callback(this);
+                if (callback) callback(this, contentType);
             }
 
             if (callback) {
-                var root = "";
+                var root = params && params.rootFolder ? params.rootFolder : "";
                 var filePath = path.join($ROOT_DIR, root, template);
 
-                fs.exists(filePath, function (exists) {
+                fs.readFile(filePath, "utf8", function (err, data) {
+
+                    var contentType = mime.lookup(filePath);
+
+                    template = data.toString();
+
+                    // ?
+                    if (template.charCodeAt(0) === 65279)
+                        template = template.substring(1);
+
+                    loadTemplate.call(obj, contentType);
+                })
+
+                /*fs.exists(filePath, function (exists) {
                     if (exists) {
                         fs.readFile(filePath, function (err, data) {
                             if (err) console.log(err);
@@ -225,7 +230,7 @@ var $t = {};
                     else {
                         loadTemplate.call(obj);
                     }
-                });
+                });*/
             }
             else {
                 loadTemplate.call(obj);
@@ -239,43 +244,22 @@ var $t = {};
 
         // render
         render: function (template, context, callback, params) {
-            new $t.template.Template(template, function (t) {
+            new $t.template.Template(template, function (t, contentType) {
                 callback(t.render(context));
             }, params);
         },
 
-        // creates a readable stream, node by node handling can be done
-        map: function (template, context, func, callback, params) {
-            var parser = new Transform({});
-            parser._transform = function (data, encoding, done) {
-                var that = this;
-                func(data, encoding, function (err, data) {
-                    if (err == null) {
-                        that.push(data);
-                    }
-                    done();
-                });
-            };
-            new $t.template.Template(template, function (t) {
-                callback(t.render(context, parser));
-            }, params);
-
-            return parser;
-        },
-
-        // creates a readable stream, node by node handling can be done
-        mapToHttpResponse: function (template, context, req, res, func, callback, params) {
-            return this.map(template, context, func, callback, params).pipe(res);
-        },
-
-        stream: function (data) {
-            // body...
-        }
-
         // render
         renderToHttpResponse: function (template, context, req, res, callback, params) {
-            new $t.template.Template(template, function (t) {
+            $REQ = req;
+            new $t.template.Template(template, function (t, contentType) {
+
+                if (!res.headerSent && contentType) {
+                    res.setHeader("Content-Type", contentType);
+                }
+
                 t.render(context, res);
+                $REQ = "";
                 callback();
             }, params);
         },
@@ -297,17 +281,19 @@ var $t = {};
     };
 
     this.template.Template.prototype.render = function (context, writer) {
-
         var out = "";
-        for (var i = 0; i < this.nodelist.length; i++) {
-            var resp = this.nodelist[i].render(context, writer);
-            /*if (writer)
-                writer.write(resp);
-            else*/
-            out += resp;
+        try {
+            for (var i = 0; i < this.nodelist.length; i++) {
+                var resp = this.nodelist[i].render(context);
+                if (writer)
+                    writer.write(resp);
+                else
+                    out += resp;
+            }
+        } catch (e) {
+            console.log(' error with think, e: %s', e);
+            console.error(' error with think, e: %s', e);
         }
-        //if (writer)
-        //    writer.end();
         return out;
     };
 
@@ -419,21 +405,20 @@ var $t = {};
                 case "text":
                 case "expr1":
                     var val = render(this.nodes[i], context);
-                    if (writer) {
+                    if (writer)
                         writer.write(val);
-                    }
                     else
                         ret.push(val);
                     break;
                     val = null;
                 case "expr2":
+                    //console.log("evaluating expr2 : %j", this.nodes[i])
                     var subvals = [];
                     for (var j = 0; j < this.nodes[i].expr.length; j++) {
                         subvals.push(render(this.nodes[i].expr[j], context));
                     }
-                    if (writer) {
+                    if (writer)
                         writer.write(eval(subvals.join("")));
-                    }
                     else
                         ret.push(eval(subvals.join("")));
                     subvals = null;
@@ -489,9 +474,18 @@ var $t = {};
         };
 
         if (this.filter) {
+
             var f = this.filter.split("..");
+
             if (f.length == 2) {
-                s = parseInt(f[0]); e = (f[1] == "n" ? iter.length - 1 : parseInt(f[1]));
+                s = parseInt(f[0]);
+                var ss = f[1].split("-");
+                if (ss.length == 1)
+                    e = (f[1] == "n" ? iter.length - 1 : parseInt(f[1]));
+                else {
+                    e = iter.length - 1 - parseInt(ss[1]);
+                    this.filter = s + ".." + e;
+                }
                 return pred(s, e);
             }
             f = this.filter.split("+");
@@ -534,123 +528,51 @@ var $t = {};
     };
 }).call($t.template.libraries);
 
-// stream library
+// register if
 (function () {
 
-    this.__stream__ = function (parser, kwargs, parseHint) {
-        kwargs["template"] = parser.parse("endrepeat" + parseHint)[0];
-        return new this.repeat(kwargs);
+    this.__if__ = function (parser, kwargs) {
+        kwargs["template"] = parser.parse("endif")[0];
+        return new this.if(kwargs);
     };
-    this.stream.prototype.pred = function () {
-        var s = -1, e = 9999999999;
 
-        var pred = function (s, e) {
-            return function (idx) {
-                return idx >= s && idx <= e;
-            };
-        };
-
-        if (this.filter) {
-            var f = this.filter.split("..");
-            if (f.length == 2) {
-                s = parseInt(f[0]); e = (f[1] == "n" ? e : parseInt(f[1]));
-                return pred(s, e);
-            }
-            f = this.filter.split("+");
-            if (f.length == 2) {
-                s = parseInt(f[0]); e = s + parseInt(f[1]);
-                return pred(s, e);
-            }
-            f = this.filter.split("-");
-            if (f.length == 2) {
-                e = f[0] == "n" ? e - 1 : parseInt(f[0]); s = e - parseInt(f[1]);
-                return pred(s, e);
-            }
-            else if (f.length == 1) {
-                s = parseInt(f[0]); e = s;
-                e = f[0] == "n" ? e - 1 : e;
-                s = f[0] == "n" ? e : s;
-                return pred(s, e);
-            }
-        }
-    };
-    this.stream = function (params) {
+    this.if = function (params) {
         params = $t.extend({ 'template': '' }, params);
-        this.stream = params['0'];
-        this.socket = params['1'];
-        this.filter = params['2'];
-        this.chunk = params['chunk'];
-        this.repeat = new $t.template.libraries.repeat({'template': params.template, '0': 'data'});
-
-        this.isLive = true;
-
-        this.id = require('node-uuid').v1();
-
-        if (this.filter)
-            this._pred = this.pred();
+        this.data = params['0'];
+        this.nodelist = new $t.template.Template(params['template']);
+    };
+    this.if.prototype.render = function (context, writer) {
+        var cond = false;
+        try {
+            var data = eval("context['" + this.data + "']");
+            cond = data ? true : false;
+        } catch (e) { }
+        if (cond)
+            return this.nodelist.render(context, writer);
         else
-            this._pred = function(){
-                return true;
-            }
-
-        var that = this;
-        this._on_socket_data = function(mess) {
-            if (!that.isLive) return that.socket.removeListener('data', that._on_socket_data);
-
-            if (mess == "more") {
-                that.stream.resume();
-            }
-            else if (mess == "close") {
-                that.end();
-            }
-        };
-
-        this._iter = [];
-        this._on_data = function(data){
-            that._iter.push(data);
-            if (that.chunk != -1 && that._iter.length == that.chunk) {
-                that._write();
-                that.stream.pause();
-            }
-        }
-        this._on_close = function(data){
-            that.end();
-        }
-        this._write = function(){
-            that.repeat.render(that._iter, that.socket);
-            that._iter = [];
-        }
+            return "";
     };
-    this.stream.prototype.write = function(str) {
-        this.socket
-    }
-    this.stream.prototype.end = function(str) {
-        
-        this.isLive = false;
-
-        this.stream.removeListener("data", this._on_data);
-        this.stream.removeListener("close", this._on_close);
-
-        this.socket.write(null);
-        this.socket.removeListener('data', that._on_socket_data);
-        this.socket.end();
-    }
-    this.stream.prototype.render = function (context, writer) {
-        var iter = context instanceof stream ? context : undefined;
-        if (!iter) try { iter = eval("context." + this.stream); } catch (e) { }
-        iter = context instanceof stream ? context : undefined;
-
-        var socket = undefined;
-        try { socket = eval("context." + this.socket); } catch (e) { }
-        socket = socket instanceof socket ? socket : undefined;
-
-        if (!iter) return "";
-        if (!socket) return "";
-
-        this.stream = iter.on("data", this._on_data).on("close", this._on_close);
-        this.socket = socket.on("data", this._on_socket_data);
+    this.if.prototype.unrender = function (template, out) {
+        out[this.data] = [];
     };
-    this.stream.prototype.unrender = function (template, out) {
+}).call($t.template.libraries);
+
+// register skip
+(function () {
+
+    this.__skip__ = function (parser, kwargs, parseHint) {
+        kwargs["template"] = parser.parse("endskip" + parseHint)[0];
+        return new this.skip(kwargs);
+    };
+
+    this.skip = function (params) {
+        params = $t.extend({ 'template': '' }, params);
+        this.nodelist = params['template'];
+    };
+    this.skip.prototype.render = function (context, writer) {
+        return this.nodelist;
+    };
+    this.skip.prototype.unrender = function (template, out) {
         out[this.data] = [];
     };
 }).call($t.template.libraries);
@@ -731,4 +653,4 @@ var $t = {};
 
 //document.write(new $t.template.Template("<ul> {% repeat result %} <li>Count: {{cnt}} </li> {% endrepeat %}</ul>").render({ "result": [{'cnt': 1}, {'cnt': 2}, {'cnt': 3}] }));
 
-root.think = $t.template;
+module.exports = $t.template;
